@@ -1,16 +1,14 @@
-management_server: 10.1.1.200
+management_server: 223.130.151.168
 servers: 
-    - address: 10.1.1.1
-      port: 51111
+    - address: 49.50.134.111
+      port: 22
       eth: 
-          - enp1s0
-          - eno1
+          - eth0
           - lo
-    - address: 10.1.1.2
-      port: 51111
+    - address: 110.165.18.66
+      port: 22
       eth:
-         - enp1s0
-         - eno1
+         - eth0
          - lo
 #    - address: 10.1.1.26
 #      port: 22

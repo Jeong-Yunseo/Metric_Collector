@@ -1,9 +1,9 @@
-address: 10.1.1.200
+address: 223.130.151.168
 #address: 10.20.24.73
-port: 51111
-username: bw
-password: qhd7812
-hostname: bw
+port: 22
+username: root
+password: skwx4216@!
+hostname: root
 eth: 
-    - enp89s0
+    - eth0
     - lo

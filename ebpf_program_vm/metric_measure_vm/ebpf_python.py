@@ -165,9 +165,9 @@ class ebpfPython:
 		proc = multiprocessing.Process(target = self.__update_callback__, args = (self.queue, self.args, ))
 		proc.start()
 
-		os.sched_setaffinity(os.getpid(), {6})
-		os.sched_setaffinity(mproc.pid, {7})
-		os.sched_setaffinity(proc.pid, {8})
+		os.sched_setaffinity(os.getpid(), {1})
+		os.sched_setaffinity(mproc.pid, {2})
+		os.sched_setaffinity(proc.pid, {3})
 
 		fp = open("procid", "w")
 		fp.write(str(os.getpid()) + "\n")
