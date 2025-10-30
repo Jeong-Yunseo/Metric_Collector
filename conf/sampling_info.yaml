@@ -1,5 +1,5 @@
 #size: 72400
-size: 100
+size: 10
 interval: 1
 ports:
     - 5001

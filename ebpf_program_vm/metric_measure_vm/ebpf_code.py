@@ -57,7 +57,7 @@ class ebpfCode:
 			self.evt_type["virtqueue_add_outbuf"] = self.evt_type["dev_queue_xmit"]
 
 	def __set_header__(self):
-		return """
+		return '''
 			#include <linux/net.h>
 			#include <linux/netdevice.h>
 			#include <linux/sched.h>
@@ -68,12 +68,12 @@ class ebpfCode:
 			#include <uapi/linux/uio.h>
 			#include <net/tcp.h>
 
-            #define IPV4_TYPE 4
+			#define IPV4_TYPE 4
 			#define TCP_TYPE 6
 			#define CYCLE_CRI1 (4200000000)
 			#define CYCLE_CRI2 (100000)
 			#define CYCLE_CRI3 (1000000000)
-			#define TCP_SKB_CB(__skb)   ((struct tcp_skb_cb *)&((__skb)->cb[0]))
+			#define TCP_SKB_CB(__skb)	((struct tcp_skb_cb *)&((__skb)->cb[0]))
 
 			struct pid_info {
 				u32 pid;
@@ -101,14 +101,14 @@ class ebpfCode:
 				u8 is_retrans;
 			} __attribute__ ((aligned(64)));
 
-		"""
+		'''
 	
 	def __set_map__(self):
-		return """
-            BPF_RINGBUF_OUTPUT(event_ringbuf, (1 << 17));
+		return '''
+			BPF_RINGBUF_OUTPUT(event_ringbuf, (1 << 17));
 			BPF_TABLE("hash", u8, u32, sampling_size, 1);
 			BPF_TABLE("hash", u16, u8, sampling_port, 10);
-            BPF_HASH(h_pid, struct pid_info, struct flow_info);
+			BPF_HASH(h_pid, struct pid_info, struct flow_info);
 			BPF_HASH(h_pid_ts, struct pid_info, u64);
 			BPF_HASH(h_pid_seq, struct flow_info, u32);
 			BPF_HASH(h_pid_data_len, struct flow_info, u32);
@@ -125,10 +125,10 @@ class ebpfCode:
 
 			BPF_HASH(h_start_seq, struct flow_info, u64);
 			BPF_HASH(h_cur_seq, struct flow_info, u64);
-		"""
+		'''
 
 	def __set_common_func__(self):
-		return """
+		return r'''
 			static inline void network_header_read(void *network_header, u8 ip_header[20]) {
 				bpf_probe_read_kernel(ip_header, 20, network_header);
 			}
@@ -174,14 +174,14 @@ class ebpfCode:
 			}
 
 			static inline u32 network_header_to_data_len2(void *network_header, u8 ip_header[20], u32 ip_data_len) {
-                void *transport_header;
-                u8 ihl;
+				void *transport_header;
+				u8 ihl;
 
-                ihl = ((ip_header[0] & 15) << 2);
-                transport_header = network_header + ihl;
+				ihl = ((ip_header[0] & 15) << 2);
+				transport_header = network_header + ihl;
 
-                return ip_data_len - ihl - tcp_header_to_header_length(transport_header);
-            }
+				return ip_data_len - ihl - tcp_header_to_header_length(transport_header);
+			}
 
 			static inline void * network_header_to_transport_header(void *network_header, u8 ip_header[20]) {
 				u8 ihl = 0;
@@ -196,65 +196,71 @@ class ebpfCode:
 			}
 
 			static inline u64 set_data_len(struct flow_info flow_info, u64 *start_data_len, u64 data_len) {
-                u64 *prev_data_len = h_data_len.lookup(&flow_info);
-                u64 cur_data_len = data_len;
+				u64 *prev_data_len = h_data_len.lookup(&flow_info);
+				u64 cur_data_len = data_len;
 
-                if (prev_data_len) {
+				if (prev_data_len) {
 					cur_data_len = (cur_data_len + *prev_data_len);
 					*start_data_len = *prev_data_len;
-                }
+				}
 
-                h_data_len.update(&flow_info, &cur_data_len);
-                return cur_data_len;
-            }
+				h_data_len.update(&flow_info, &cur_data_len);
+				return cur_data_len;
+			}
 
 			static inline u64 get_sampling_size(struct flow_info flow_info) {
 				u8 key = 1;
-                u32 *ssize_ = sampling_size.lookup(&key);
-                u32 ssize = (ssize_ ? *ssize_ : 0);
+				u32 *ssize_ = sampling_size.lookup(&key);
+				u32 ssize = (ssize_ ? *ssize_ : 0);
 
-                u64 zero = 0;
-                u64 *size = h_sample_size.lookup_or_try_init(&flow_info, &zero);
-                if (size) return *size;
-                return ssize;
+				u64 zero = 0;
+				u64 *size = h_sample_size.lookup_or_try_init(&flow_info, &zero);
+				if (size) return *size;
+				return ssize;
 			}
 
 			static inline void set_sampling_size(struct flow_info flow_info) {
-                u8 key = 1;
-                u32 *ssize_ = sampling_size.lookup(&key);
-                u64 ssize = (ssize_ ? *ssize_ : 0);
+				u8 key = 1;
+				u32 *ssize_ = sampling_size.lookup(&key);
+				u64 ssize = (ssize_ ? *ssize_ : 0);
 
-                u64 zero = 0;
-                u64 *size_ = h_sample_size.lookup_or_try_init(&flow_info, &zero);
+				u64 zero = 0;
+				u64 *size_ = h_sample_size.lookup_or_try_init(&flow_info, &zero);
 
-                ssize = ssize + (size_ ? *size_ : 0);
-                h_sample_size.update(&flow_info, &ssize);
-            }
+				ssize = ssize + (size_ ? *size_ : 0);
+				h_sample_size.update(&flow_info, &ssize);
+			}
 
 			static inline u8 is_event_occur(struct flow_info flow_info, u64 data_len) {
-                u64 sampling_size = get_sampling_size(flow_info);
-                return data_len >= sampling_size;
-            }
+				u64 sampling_size = get_sampling_size(flow_info);
+				return data_len >= sampling_size;
+			}
 	
 			static inline void event_occur(struct pt_regs *ctx, struct flow_info flow_info, u64 data_len, u8 evt_type, u8 endian, u64 ts, u64 start_seq, u64 cur_seq, u8 is_retrans) {
-                struct event_data *data = event_ringbuf.ringbuf_reserve(sizeof(struct event_data));
+				bpf_trace_printk("Before data\n");
+				struct event_data *data = event_ringbuf.ringbuf_reserve(sizeof(struct event_data));
+				bpf_trace_printk("Before task\n");
 				struct task_struct *task = (struct task_struct *) bpf_get_current_task();
-                if (data) {
-                    data->src_addr = endian ? bpf_ntohl(flow_info.src_addr) : flow_info.src_addr;
-                    data->dst_addr = endian ? bpf_ntohl(flow_info.dst_addr) : flow_info.dst_addr;
-                    data->src_port = flow_info.src_port;
-                    data->dst_port = flow_info.dst_port;
-                    data->data_len = data_len;
-                    data->ts = ts;
-                    data->evt_type = evt_type;
+				bpf_trace_printk("Before if\n");
+
+				if (data) {
+					data->src_addr = endian ? bpf_ntohl(flow_info.src_addr) : flow_info.src_addr;
+					data->dst_addr = endian ? bpf_ntohl(flow_info.dst_addr) : flow_info.dst_addr;
+					data->src_port = flow_info.src_port;
+					data->dst_port = flow_info.dst_port;
+					data->data_len = data_len;
+					data->ts = ts;
+					data->evt_type = evt_type;
 					data->tid = bpf_get_current_pid_tgid();
 					data->start_seq = start_seq;
 					data->cur_seq = cur_seq;
 					data->is_retrans = is_retrans;
 					data->cpuid = task->cpu;
-                    event_ringbuf.ringbuf_submit(data, BPF_RB_FORCE_WAKEUP);
-                }
-            }
+					bpf_trace_printk("Before submission\n");
+					event_ringbuf.ringbuf_submit(data, BPF_RB_FORCE_WAKEUP);
+					bpf_trace_printk("After submission\n");
+				}
+			}
 
 			static inline u8 check_recv_socket(struct flow_info flow_info, u64 data_len) {
 				flow_info.src_addr = bpf_ntohl(flow_info.src_addr);
@@ -279,10 +285,10 @@ class ebpfCode:
 				return ret;
 			}
 	
-	"""
+	'''
 	
 	def __set_common_func_sock__(self):
-		return """
+		return '''
 			static inline struct flow_info make_flow_info_sock(struct sock *sk, u8 evt_type) {
 				struct flow_info flow_info = {
 					.src_addr = evt_type == 4 ? sk->sk_daddr : sk->sk_rcv_saddr,
@@ -293,23 +299,23 @@ class ebpfCode:
 				};
 				return flow_info;
 			}
-            
-            static inline u8 get_flow_info(struct pid_info pid_info, struct flow_info *flow_info) {
-                struct flow_info *stored_flow_info = h_pid.lookup(&pid_info);
-                if (stored_flow_info) {
-                    flow_info->src_addr = stored_flow_info->src_addr;
-                    flow_info->dst_addr = stored_flow_info->dst_addr;
-                    flow_info->src_port = stored_flow_info->src_port;
-                    flow_info->dst_port = stored_flow_info->dst_port;
-                    flow_info->evt_type = stored_flow_info->evt_type;
-                    return 1;
-                }
-                return 0;
-            }
-		"""
+			
+			static inline u8 get_flow_info(struct pid_info pid_info, struct flow_info *flow_info) {
+				struct flow_info *stored_flow_info = h_pid.lookup(&pid_info);
+				if (stored_flow_info) {
+					flow_info->src_addr = stored_flow_info->src_addr;
+					flow_info->dst_addr = stored_flow_info->dst_addr;
+					flow_info->src_port = stored_flow_info->src_port;
+					flow_info->dst_port = stored_flow_info->dst_port;
+					flow_info->evt_type = stored_flow_info->evt_type;
+					return 1;
+				}
+				return 0;
+			}
+		'''
 
 	def __set_common_func_ip__(self):
-		return """
+		return '''
 			static inline struct flow_info make_flow_info_skb(u8 ip_header[20], u8 tcp_header[8], u8 evt_type) {
 				u32 src_addr, dst_addr;
 				u16 src_port, dst_port;
@@ -332,53 +338,53 @@ class ebpfCode:
 			}
 
 			static inline u8 is_retrans(struct flow_info flow_info, u32 cur_seq, u32 *prev_seq, u64 ts) {
-                u64 *prev_seq_ = h_prev_seq.lookup(&flow_info);
+				u64 *prev_seq_ = h_prev_seq.lookup(&flow_info);
 				u64 *prev_ts = h_prev_ts.lookup(&flow_info);
 				u64 BIGNUM = (1 << 30);
 				
 				u8 flag = (prev_ts ? (ts - *prev_ts) < 10000000 ? 0 : 1 : 0);
 
-                if (prev_seq_) {
+				if (prev_seq_) {
 					*prev_seq = *prev_seq_;
 					if (*prev_seq >= cur_seq && *prev_seq - cur_seq < BIGNUM) return (flag ? 1 : 2);
 					else if (*prev_seq < cur_seq && cur_seq - *prev_seq > BIGNUM) return (flag ? 1 : 2);
-                }
+				}
 				else {
 					*prev_seq = 0;
 				}
 
-                return 0;
-            }
+				return 0;
+			}
 
 			static inline u64 get_data_len(struct flow_info flow_info, u32 cur_seq, u32 prev_seq, u32 data_len) {
 				u64 data_len_;
 
-                if (prev_seq) {
-                    if (prev_seq > cur_seq) {
-                        data_len_ = (UINT_MAX - (u64) prev_seq) + (u64) cur_seq;
-                    }
-                    else data_len_ = (u64) cur_seq - (u64) prev_seq;
+				if (prev_seq) {
+					if (prev_seq > cur_seq) {
+						data_len_ = (UINT_MAX - (u64) prev_seq) + (u64) cur_seq;
+					}
+					else data_len_ = (u64) cur_seq - (u64) prev_seq;
 
 					if (!data_len && data_len_ == 1) data_len_ = data_len_ - 1;
-                }
+				}
 				else data_len_ = data_len;
 
-                return data_len_;
-            }
+				return data_len_;
+			}
 
 			static inline u8 is_retrans2(struct flow_info flow_info, u64 cur_seq, u64 *prev_seq, u64 ts) {
-                u64 *prev_seq_ = h_prev_seq.lookup(&flow_info);
+				u64 *prev_seq_ = h_prev_seq.lookup(&flow_info);
 				u64 *prev_ts = h_prev_ts.lookup(&flow_info);
-                u64 BIGNUM = (1 << 30);
+				u64 BIGNUM = (1 << 30);
 
 				u8 flag = 0;
 				if (prev_ts) {
 					if (ts - *prev_ts > 10000000) flag = 1;
 				}
 
-                if (prev_seq_) {
-                    *prev_seq = *prev_seq_;
-                    if (*prev_seq >= cur_seq && *prev_seq - cur_seq < BIGNUM) {
+				if (prev_seq_) {
+					*prev_seq = *prev_seq_;
+					if (*prev_seq >= cur_seq && *prev_seq - cur_seq < BIGNUM) {
 						if (flag) {
 							u64 *prev_reseq = h_prev_reseq.lookup(&flow_info);
 							u64 *prev_rets = h_prev_rets.lookup(&flow_info);
@@ -387,7 +393,7 @@ class ebpfCode:
 						}
 						else return 2;
 					}
-                    else if (*prev_seq < cur_seq && cur_seq - *prev_seq > BIGNUM) {
+					else if (*prev_seq < cur_seq && cur_seq - *prev_seq > BIGNUM) {
 						if (flag) {
 							u64 *prev_reseq = h_prev_reseq.lookup(&flow_info);
 							u64 *prev_rets = h_prev_rets.lookup(&flow_info);
@@ -396,13 +402,13 @@ class ebpfCode:
 						}
 						else return 2;
 					}
-                }
-                else {
-                    *prev_seq = 0;
-                }
+				}
+				else {
+					*prev_seq = 0;
+				}
 
-                return 0;
-            }
+				return 0;
+			}
 
 			static inline u64 get_data_len2(struct flow_info flow_info, u64 cur_seq, u64 prev_seq) {
 				u64 data_len_ = 0;
@@ -422,81 +428,83 @@ class ebpfCode:
 
 				return data_len_;
 			}
-		"""
+		'''
 
 	def __set_body_func_sock_enter__(self):
-		return """
+		return r'''
 			int #function_name#(struct pt_regs *ctx) {
-                #param_pos#
-                u32 pid = bpf_get_current_pid_tgid() >> 32;
-                u32 tid = bpf_get_current_pid_tgid();
-                u64 ts = bpf_ktime_get_boot_ns(), zero = 0;
-                u8 evt_type = #evt_type#;
+				#param_pos#
+				u32 pid = bpf_get_current_pid_tgid() >> 32;
+				u32 tid = bpf_get_current_pid_tgid();
+				u64 ts = bpf_ktime_get_boot_ns(), zero = 0;
+				u8 evt_type = #evt_type#;
 
-                struct flow_info flow_info = {};
-                if (#evt_type# >= 10) {
-                    flow_info = make_flow_info_sock(sk, (evt_type == 10 ? 0 : 1));
-                }
-                else {
-                    flow_info = make_flow_info_sock(sk, evt_type);
-                }
+				struct flow_info flow_info = {};
+				if (#evt_type# >= 10) {
+					flow_info = make_flow_info_sock(sk, (evt_type == 10 ? 0 : 1));
+				}
+				else {
+					flow_info = make_flow_info_sock(sk, evt_type);
+				}
 
-                struct pid_info pid_info = {};
-                pid_info.pid = pid;
-                pid_info.tid = tid;
-                pid_info.evt_type = evt_type;
+				struct pid_info pid_info = {};
+				pid_info.pid = pid;
+				pid_info.tid = tid;
+				pid_info.evt_type = evt_type;
 
-                h_pid.update(&pid_info, &flow_info);
+				h_pid.update(&pid_info, &flow_info);
 				h_pid_ts.update(&pid_info, &ts);
 
-                return 0;
-            }
+				return 0;
+			}
 
-            int _#function_name#(struct pt_regs *ctx) {
-                #param_pos#
-                u32 pid = bpf_get_current_pid_tgid() >> 32;
-                u32 tid = bpf_get_current_pid_tgid();
-                s32 data_len = PT_REGS_RC(ctx);
+			int _#function_name#(struct pt_regs *ctx) {
+				#param_pos#
+				u32 pid = bpf_get_current_pid_tgid() >> 32;
+				u32 tid = bpf_get_current_pid_tgid();
+				s32 data_len = PT_REGS_RC(ctx);
 				u64 cur_ts = bpf_ktime_get_boot_ns(), *ts;
-                u8 evt_type = #evt_type#;
+				u8 evt_type = #evt_type#;
 				
-                struct flow_info flow_info = {};
-                struct pid_info pid_info = {};
-                pid_info.pid = pid;
-                pid_info.tid = tid;
-                pid_info.evt_type = evt_type;
+				struct flow_info flow_info = {};
+				struct pid_info pid_info = {};
+				pid_info.pid = pid;
+				pid_info.tid = tid;
+				pid_info.evt_type = evt_type;
 
-                u64 start_data_len = 0, data_len_, zero = 0;
+				u64 start_data_len = 0, data_len_, zero = 0;
 
-                if (data_len <= 0) return 0;
+				if (data_len <= 0) return 0;
 
-                if (!get_flow_info(pid_info, &flow_info)) return 0;
+				if (!get_flow_info(pid_info, &flow_info)) return 0;
 				ts = h_pid_ts.lookup(&pid_info);
 				if (!ts) return 0;
 				
-                data_len_ = set_data_len(flow_info, &start_data_len, (u64) data_len);
+				data_len_ = set_data_len(flow_info, &start_data_len, (u64) data_len);
 
-                if (is_event_occur(flow_info, data_len_) && (check_port(flow_info.src_port) || check_port(flow_info.dst_port))) {
-                    set_sampling_size(flow_info);
-                    event_occur(ctx, flow_info, data_len_, flow_info.evt_type, #BIG_ENDIAN#, *ts, 0, 0, 0);
-                }
+				bpf_trace_printk("is_event_occur: %d, src: %d, dst: %d\n", is_event_occur(flow_info, data_len_), check_port(flow_info.src_port), check_port(flow_info.dst_port));
+				if (is_event_occur(flow_info, data_len_) && (check_port(flow_info.src_port) || check_port(flow_info.dst_port))) {
+					bpf_trace_printk("passed if\n");
+					set_sampling_size(flow_info);
+					event_occur(ctx, flow_info, data_len_, flow_info.evt_type, #BIG_ENDIAN#, *ts, 0, 0, 0);
+				}
 
-                h_pid.delete(&pid_info);
+				h_pid.delete(&pid_info);
 				h_pid_ts.delete(&pid_info);
-                return 0;
-            }
-		"""
+				return 0;
+			}
+		'''
 	
 	def __set_body_func_sock_exit__(self):
-		return """
-            int #function_name#(struct pt_regs *ctx) {
-                #param_pos#
-                u32 pid = bpf_get_current_pid_tgid() >> 32;
+		return r'''
+			int #function_name#(struct pt_regs *ctx) {
+				#param_pos#
+				u32 pid = bpf_get_current_pid_tgid() >> 32;
 				u32 tid = bpf_get_current_pid_tgid();
 				u64 ts = bpf_ktime_get_boot_ns(), zero = 0;
-                u8 evt_type = #evt_type#;
+				u8 evt_type = #evt_type#;
 				
-                struct flow_info flow_info = {};
+				struct flow_info flow_info = {};
 				if (#evt_type# >= 10) {
 					flow_info = make_flow_info_sock(sk, (evt_type == 10 ? 0 : 1));
 				}
@@ -509,15 +517,15 @@ class ebpfCode:
 				pid_info.tid = tid;
 				pid_info.evt_type = evt_type;
 
-                h_pid.update(&pid_info, &flow_info);
+				h_pid.update(&pid_info, &flow_info);
 				h_pid_ts.update(&pid_info, &ts);
 
-                return 0;
-            }
-            
+				return 0;
+			}
+			
 			int _#function_name#(struct pt_regs *ctx) {
 				#param_pos#
-                u32 pid = bpf_get_current_pid_tgid() >> 32;
+				u32 pid = bpf_get_current_pid_tgid() >> 32;
 				u32 tid = bpf_get_current_pid_tgid();
 				s32 data_len = PT_REGS_RC(ctx);
 				u64 ts = bpf_ktime_get_boot_ns(), *entry_ts;
@@ -537,7 +545,9 @@ class ebpfCode:
 				if (!(entry_ts = h_pid_ts.lookup(&pid_info))) return 0; 
 				data_len_ = set_data_len(flow_info, &start_data_len, (u64) data_len);
 				
+				bpf_trace_printk("is_event_occur: %d, src: %d, dst: %d\n", is_event_occur(flow_info, data_len_), check_port(flow_info.src_port), check_port(flow_info.dst_port));
 				if (is_event_occur(flow_info, data_len_) && (check_port(flow_info.src_port) || check_port(flow_info.dst_port))) {
+					bpf_trace_printk("passed if\n");
 					set_sampling_size(flow_info);
 					event_occur(ctx, flow_info, data_len_, flow_info.evt_type, #BIG_ENDIAN#, ts, 0, 0, 0);
 				}
@@ -546,19 +556,19 @@ class ebpfCode:
 				h_pid_ts.delete(&pid_info);
 				return 0;
 			}
-		"""
+		'''
 	
 	def __set_body_func_tcp_enter__(self):
-		return """
+		return r'''
 			int #function_name#(struct pt_regs *ctx) {
 				#param_pos#
 				struct tcphdr *th = (struct tcphdr *) skb->data;
-                u32 seq = th->seq; seq = ntohl(seq);
+				u32 seq = th->seq; seq = ntohl(seq);
 				u32 data_len = skb->len - 32; 
 				u64 prev_seq;
 				u64 data_len_ = 1111;
 				u64 ts = bpf_ktime_get_boot_ns();
-                u8 evt_type = #evt_type#;
+				u8 evt_type = #evt_type#;
 				u8 is_retrans = 0;
 				
 				u32 pid = bpf_get_current_pid_tgid() >> 32;
@@ -569,10 +579,10 @@ class ebpfCode:
 				u64 start_seq = seq, *start_seq_;
 				u64 cur_seq = seq + data_len;
 
-                struct flow_info flow_info = {};
-                flow_info = make_flow_info_sock(sk, evt_type);
-                flow_info.src_addr = bpf_ntohl(flow_info.src_addr);
-                flow_info.dst_addr = bpf_ntohl(flow_info.dst_addr);
+				struct flow_info flow_info = {};
+				flow_info = make_flow_info_sock(sk, evt_type);
+				flow_info.src_addr = bpf_ntohl(flow_info.src_addr);
+				flow_info.dst_addr = bpf_ntohl(flow_info.dst_addr);
 
 				if (!(start_seq_ = h_start_seq.lookup(&flow_info))) h_start_seq.update(&flow_info, &start_seq);
 				is_retrans = is_retrans2(flow_info, cur_seq, &prev_seq, ts);
@@ -582,10 +592,12 @@ class ebpfCode:
 				else if (is_retrans == 1) data_len_ = 0;
 				else if (is_retrans == 3) return 0;
 
- 				if (is_event_occur(flow_info, data_len_) && (check_port(flow_info.src_port) || check_port(flow_info.dst_port))) {
-                    set_sampling_size(flow_info);
-                    event_occur(ctx, flow_info, data_len_, evt_type, #LITTLE_ENDIAN#, ts, (!start_seq_ ? start_seq : *start_seq_), cur_seq, is_retrans);
-                }
+				bpf_trace_printk("is_event_occur: %d, src: %d, dst: %d\n", is_event_occur(flow_info, data_len_), check_port(flow_info.src_port), check_port(flow_info.dst_port));
+				if (is_event_occur(flow_info, data_len_) && (check_port(flow_info.src_port) || check_port(flow_info.dst_port))) {
+					bpf_trace_printk("passed if\n");
+					set_sampling_size(flow_info);
+					event_occur(ctx, flow_info, data_len_, evt_type, #LITTLE_ENDIAN#, ts, (!start_seq_ ? start_seq : *start_seq_), cur_seq, is_retrans);
+				}
 
 				if (!is_retrans) {
 					h_prev_seq.update(&flow_info, &cur_seq);
@@ -598,10 +610,10 @@ class ebpfCode:
 
 				return 0;
 			}
-		"""
+		'''
 
 	def __set_body_func_tcp_exit__(self):
-		return """
+		return r'''
 			int #function_name#(struct pt_regs *ctx) {
 				#param_pos#
 				u32 pid = bpf_get_current_pid_tgid() >> 32;
@@ -631,7 +643,7 @@ class ebpfCode:
 			int _#function_name#(struct pt_regs *ctx) {
 				#param_pos#
 				u32 pid = bpf_get_current_pid_tgid() >> 32;
-                u32 tid = bpf_get_current_pid_tgid();
+				u32 tid = bpf_get_current_pid_tgid();
 				
 				u32 *seq, prev_seq;
 				u32 data_len = 0; u64 data_len_;
@@ -661,7 +673,9 @@ class ebpfCode:
 				}
 				data_len_ = set_data_len(flow_info, &start_data_len, cur_send_bytes);
 				
+				bpf_trace_printk("is_event_occur: %d, src: %d, dst: %d\n", is_event_occur(flow_info, data_len_), check_port(flow_info.src_port), check_port(flow_info.dst_port));
 				if (is_event_occur(flow_info, data_len_) && (check_port(flow_info.src_port) || check_port(flow_info.dst_port)) && data_len_) {
+					bpf_trace_printk("passed if\n");
 					set_sampling_size(flow_info);
 					event_occur(ctx, flow_info, start_data_len, data_len_, evt_type, #LITTLE_ENDIAN#, ts, 0);
 				}
@@ -670,41 +684,41 @@ class ebpfCode:
 				h_prev_seq.update(&flow_info, seq);
 				return 0;
 			}
-		"""
+		'''
 	
 	def __set_body_func_ip_enter__(self):
-		return """
+		return r'''
 			int #function_name#(struct pt_regs *ctx) {
 				#param_pos#
 				u8 tcp_header[8];
-                u8 ip_header[20];
+				u8 ip_header[20];
 
-                u32 data_len;
-                u32 seq;
+				u32 data_len;
+				u32 seq;
 				u64 prev_seq;
-                u8 evt_type = #evt_type#;
+				u8 evt_type = #evt_type#;
 				u8 parsing_type = #parsing_type#;
 				u8 is_retrans = 0;
 
-                struct flow_info flow_info = {};
-                u64 start_data_len = 0, data_len_ = 1111, zero = 0;
+				struct flow_info flow_info = {};
+				u64 start_data_len = 0, data_len_ = 1111, zero = 0;
 				u64 cur_send_bytes;
 				u64 ts = bpf_ktime_get_boot_ns();
 				
 				u32 pid = bpf_get_current_pid_tgid() >> 32;
-                u32 tid = bpf_get_current_pid_tgid();
+				u32 tid = bpf_get_current_pid_tgid();
 
-                void *network_header = sk_buff_to_network_header(skb, parsing_type);
-                void *headerp = network_header_to_transport_header(network_header, ip_header);
-                if (!headerp) return 0;
+				void *network_header = sk_buff_to_network_header(skb, parsing_type);
+				void *headerp = network_header_to_transport_header(network_header, ip_header);
+				if (!headerp) return 0;
 				if (parsing_type) 
 					headerp = skb->head + ((skb->data - skb->head) + ((ip_header[0] & 15) << 2));
 				else
 					headerp = skb->head + skb->transport_header;
-                bpf_probe_read_kernel(&tcp_header, sizeof(tcp_header), headerp);
+				bpf_probe_read_kernel(&tcp_header, sizeof(tcp_header), headerp);
 
-                seq = ((tcp_header[4] << 24) | (tcp_header[5] << 16) | (tcp_header[6] << 8) | tcp_header[7]);
-                flow_info = make_flow_info_skb(ip_header, tcp_header, evt_type);
+				seq = ((tcp_header[4] << 24) | (tcp_header[5] << 16) | (tcp_header[6] << 8) | tcp_header[7]);
+				flow_info = make_flow_info_skb(ip_header, tcp_header, evt_type);
 
 				if (!(check_port(flow_info.src_port) || check_port(flow_info.dst_port))) {
 					headerp = skb->head + skb->transport_header + ((ip_header[0] & 15) << 2);
@@ -713,7 +727,7 @@ class ebpfCode:
 					flow_info = make_flow_info_skb(ip_header, tcp_header, evt_type);
 				}
 
-                data_len = network_header_to_data_len(network_header, ip_header);
+				data_len = network_header_to_data_len(network_header, ip_header);
 
 				if (!data_len) return 0;
 				if (evt_type == 7 && !seq) return 0;
@@ -729,10 +743,12 @@ class ebpfCode:
 				else if (is_retrans == 1) data_len_ = 0;
 				else if (is_retrans == 3) return 0;
 				
+				bpf_trace_printk("is_event_occur: %d, src: %d, dst: %d\n", is_event_occur(flow_info, data_len_), check_port(flow_info.src_port), check_port(flow_info.dst_port));
 				if (is_event_occur(flow_info, data_len_) && (check_port(flow_info.src_port) || check_port(flow_info.dst_port))) {
-                    set_sampling_size(flow_info);
-                    event_occur(ctx, flow_info, data_len_, evt_type, #LITTLE_ENDIAN#, ts, (!start_seq_ ? start_seq : *start_seq_), cur_seq, is_retrans);
-                }
+					bpf_trace_printk("passed if\n");
+					set_sampling_size(flow_info);
+					event_occur(ctx, flow_info, data_len_, evt_type, #LITTLE_ENDIAN#, ts, (!start_seq_ ? start_seq : *start_seq_), cur_seq, is_retrans);
+				}
 
 				if (!is_retrans) {
 					h_prev_seq.update(&flow_info, &cur_seq);
@@ -745,10 +761,10 @@ class ebpfCode:
 				
 				return 0;
 			}
-		"""
+		'''
 	
 	def __set_body_func_ip_exit__(self):
-		return """
+		return r'''
 			int #function_name#(struct pt_regs *ctx) {
 				#param_pos#
 				u32 pid = bpf_get_current_pid_tgid() >> 32;
@@ -780,9 +796,9 @@ class ebpfCode:
 				pid_info.tid = tid;
 				pid_info.evt_type = evt_type;
 
-                h_pid.update(&pid_info, &flow_info);
-                h_pid_seq.update(&flow_info, &seq);
-                h_pid_data_len.update(&flow_info, &data_len);
+				h_pid.update(&pid_info, &flow_info);
+				h_pid_seq.update(&flow_info, &seq);
+				h_pid_data_len.update(&flow_info, &data_len);
 
 				return 0;
 			}
@@ -821,7 +837,9 @@ class ebpfCode:
 				}
 				data_len_ = set_data_len(flow_info, &start_data_len, cur_send_bytes);
 				
+				bpf_trace_printk("is_event_occur: %d, src: %d, dst: %d\n", is_event_occur(flow_info, data_len_), check_port(flow_info.src_port), check_port(flow_info.dst_port));
 				if (is_event_occur(flow_info, data_len_) && (check_port(flow_info.src_port) || check_port(flow_info.dst_port)) && data_len_) {
+					bpf_trace_printk("passed if\n");
 					set_sampling_size(flow_info);
 					event_occur(ctx, flow_info, start_data_len, data_len_, evt_type, #LITTLE_ENDIAN#, bpf_ktime_get_boot_ns(), 0);
 				}
@@ -829,7 +847,7 @@ class ebpfCode:
 				h_prev_seq.update(&flow_info, seq);
 				return 0;
 			}
-		"""
+		'''
 
 	def __main__(self):
 		self.__set_variable__()
