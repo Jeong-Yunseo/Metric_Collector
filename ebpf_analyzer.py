@@ -161,6 +161,7 @@ class ebpfAnalyzer:
 		if data["is_retrans"] == 1: self.loss_rate[key][1] += 1
 
 		diff_ts = data["ts"] - self.throughput[key][0]
+		print(f'diff_ts: {diff_ts}, data["ts"]: {data["ts"]}, throughput: {self.throughput[key][10]}')
 		
 		if diff_ts >= 1000000000: 
 			flow_id = data["flow_id"]
@@ -186,6 +187,7 @@ class ebpfAnalyzer:
 #		if sql_data1["data_len"] != sql_data2["data_len"]: return False
 #		if abs(sql_data1["data_len"] - sql_data2["data_len"]) >= self.alpha: return False
 
+		print(f'server1: {server1}, server2: {server2}')
 		if server1 > server2:
 			server1, server2 = server2, server1
 			sql_data1, sql_data2 = sql_data2, sql_data1
@@ -248,7 +250,8 @@ class ebpfAnalyzer:
 		while True:
 			flow_id = list(self.flow_id)
 			eidx = min(len(list(self.flow_id)), (idx + 1) * 8)
-#			print(f'flow_id: {flow_id}, eidx: {eidx}')
+			if sidx == 0:
+				print(f'flow_id: {flow_id}, sidx: {sidx}, eidx: {eidx}')
 			for fidx in range(sidx, eidx):
 				try: fid = flow_id[fidx]
 				except: break
@@ -283,6 +286,7 @@ class ebpfAnalyzer:
 				idx1 = 0
 				idx2 = 0
 
+				print(f'idx1: {idx1}, idx2: {idx2}, sql_data1: {sql_data1[idx1]["data_len"]}, sql_data2: {sql_data2[idx2]["data_len"]}, len1: {len1}, len2: {len2}')
 				while idx1 < len1 and idx2 < len2:
 					while idx2 < len2 and sql_data1[idx1]["data_len"] > sql_data2[idx2]["data_len"]: idx2 += 1
 					if idx2 < len2:
@@ -355,6 +359,7 @@ class ebpfAnalyzer:
 					idx1 = 0
 					idx2 = 0
 
+					print(f'idx1: {idx1}, idx2: {idx2}, sql_data1: {sql_data1[idx1]["data_len"]}, sql_data2: {sql_data2[idx2]["data_len"]}, len1: {len1}, len2: {len2}')
 					while idx1 < len1 and idx2 < len2:
 						while idx2 < len2 and sql_data1[idx1]["data_len"] > sql_data2[idx2]["data_len"]: idx2 += 1
 						if idx2 < len2:
@@ -380,37 +385,48 @@ class ebpfAnalyzer:
 			flow_id = list(self.flow_id)
 			eidx = min(len(list(self.flow_id)), (idx + 1) * 8)
 			for fidx in range(sidx, eidx):
-				try: fid = flow_id[fidx]
-				except: break
+				try: 
+					fid = flow_id[fidx]
+					print(f'fid: {fid}')
+				except:
+					print('break1')
+					break
 				if self.flow_id_cache.get(fid) == None:
 					self.flow_id_cache[fid] = ed.__get_flow_info__(fid)[0]
 
 				try:
 					src_addr = self.flow_id_cache[fid]["src_addr"]
 					dst_addr = self.flow_id_cache[fid]["dst_addr"]
+					print(f'src_addr: {src_addr}, dst_addr: {dst_addr}')
 
 					server1 = self.server_info[src_addr]
 					server2 = self.server_info[dst_addr]
-				except: 
+				except:
+					print('continue1')
 					continue
 
 				evt_type1 = 0
 				evt_type2 = 4
 			
 				metadata_key = (server1, fid)
-				if prev_data_len.get(metadata_key) == None: prev_data_len[metadata_key] = 0
+				if prev_data_len.get(metadata_key) == None:
+					prev_data_len[metadata_key] = 0
 
+				print('here3')
 				sql_data1 = self.__get_data__(ed, fid, server1, metadata_key, prev_data_len, evt_type1)
 				if sql_data1 == None: continue
 
+				print('here4')
 				sql_data2 = self.__get_data__(ed, fid, server2, metadata_key, prev_data_len, evt_type2)
 				if sql_data2 == None: continue
+				priet('here5')
 
 				len1 = len(sql_data1)
 				len2 = len(sql_data2)
 				idx1 = 0
 				idx2 = 0
 
+				print(f'idx1: {idx1}, idx2: {idx2}, sql_data1: {sql_data1[idx1]["data_len"]}, sql_data2: {sql_data2[idx2]["data_len"]}, len1: {len1}, len2: {len2}')
 				while idx1 < len1 and idx2 < len2:
 					while idx2 < len2 and sql_data1[idx1]["data_len"] > sql_data2[idx2]["data_len"]: idx2 += 1
 					if idx2 < len2:
@@ -482,6 +498,7 @@ class ebpfAnalyzer:
 						metric_key2 = (server, fid, sql_data2[0]["evt_type"])
 
 						update = True
+						print(f'idx1: {idx1}, idx2: {idx2}, sql_data1: {sql_data1[idx1]["data_len"]}, sql_data2: {sql_data2[idx2]["data_len"]}, len1: {len1}, len2: {len2}')
 						while idx1 < len1 and idx2 < len2:
 							while idx2 < len2 and sql_data1[idx1]["data_len"] > sql_data2[idx2]["data_len"]: 
 								self.__statistical_data__(metric_key2, sql_data2[idx2])
@@ -504,6 +521,8 @@ class ebpfAnalyzer:
 		ed.__connect__()
 
 		while True:
+#			print(f'store_queue size={store_queue.qsize()}')
+			# qsize가 0임
 			while store_queue.qsize() > 0:
 				data = store_queue.get()
 				ed.__query4__(0, data[0], data[1], data[2], data[3], data[4], data[5], data[6])
@@ -514,6 +533,8 @@ class ebpfAnalyzer:
 		ed.__connect__()
 
 		while True:
+#			print(f'stats = {statistical_data_queue.qsize()}')
+			# qsize가 0임
 			while statistical_data_queue.qsize() > 0:
 				data = statistical_data_queue.get()
 				ed.__query6__(data)
